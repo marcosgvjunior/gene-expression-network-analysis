@@ -48,9 +48,10 @@ To use the script, run the R code provided in the file `gene_expression_network_
 
 ## Output Files
 
-1. Activation adjacency matrix: "act_BT_ALL_seurat.xlsx"
-2. Inhibition adjacency matrix: "sup_BT_ALL_seurat.xlsx"
-3. Filtered gene expression data: "datapoints_seurat_BT_ALL.xlsx"
+1. Combined node information: "rede_BT_ALL_seurat.xlsx"
+2. Activation adjacency matrix: "act_BT_ALL_seurat.xlsx"
+3. Inhibition adjacency matrix: "sup_BT_ALL_seurat.xlsx"
+4. Filtered gene expression data: "datapoints_seurat_BT_ALL.xlsx"
 
 ## Applications
 These functions can be applied to the analysis of gene expression data and the construction of potential gene regulatory networks. This can aid in the understanding of cellular processes, disease mechanisms, and therapeutic targets.
