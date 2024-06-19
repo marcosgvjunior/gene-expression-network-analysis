@@ -26,7 +26,7 @@ source("matrixfromtable.R")
 # Function to load and preprocess data
 load_and_preprocess_data <- function() {
 
-  xdata <- data.table::fread("data/GSE84465_GBM_All_data.csv", sep = " ")
+  xdata <- data.table::fread("input/GSE84465_GBM_All_data.csv", sep = " ")
   data  <- as.data.frame(xdata)
   
   mem_change(rm(xdata))  
@@ -38,7 +38,7 @@ load_and_preprocess_data <- function() {
 
 # Function to load and preprocess metadata
 load_and_preprocess_metadata <- function() {
-  gse <- getGEO(GEO = NULL, filename = "data/GSE84465_series_matrix.txt", destdir = tempdir(),
+  gse <- getGEO(GEO = NULL, filename = "input/GSE84465_series_matrix.txt", destdir = tempdir(),
                 GSElimits = NULL, GSEMatrix = TRUE, AnnotGPL = FALSE, getGPL = FALSE,
                 parseCharacteristics = TRUE)
     
@@ -75,7 +75,7 @@ create_seurat_object_and_normalize <- function(counts, p) {
 
 selection_gene_names <- function(fullcounts){
 
-  network               <- data.frame( read_excel( "Network_v3.xls" ) )
+  network               <- data.frame( read_excel( "input/Network_v3.xls" ) )
   nodes                 <- data.frame( network %>% select( nodeout, nodein, action, mechanism ) %>% filter( mechanism == "Transcription regulation" ) )
   names( nodes )        <- c( "nodeout", "nodein", "action", "mechanism" )
   nnames                <- dplyr::union( nodes[["nodeout"]], nodes[["nodein"]] )
@@ -87,11 +87,16 @@ selection_gene_names <- function(fullcounts){
 }
 
 # Function to filter and process expression set
-filter_expression_set <- function(newcounts, p) {
+filter_expression_set <- function(newcounts, p, filtering = 'tumor') {
   # Filter expression set object based on metadata
   eset_raw <- ExpressionSet( assayData = as.matrix(newcounts), phenoData = AnnotatedDataFrame(p)) 
-  eset_raw <- eset_raw[ , eset_raw$characteristics_ch1.6 == c("Neoplastic")] 
-  eset_raw <- eset_raw[ , eset_raw$characteristics_ch1.3 == c("Tumor")]
+
+  if (filtering == 'tumor') {
+    eset_raw <- eset_raw[ , eset_raw$characteristics_ch1.6 == c("Neoplastic")] 
+    eset_raw <- eset_raw[ , eset_raw$characteristics_ch1.3 == c("Tumor")]
+  } else {
+    eset_raw <- eset_raw[ , eset_raw$characteristics_ch1.7 == c("Regular")]
+  }
   
   # Check dimensions of the expression set object
   cat("Dimensions of expression set object: ", dim(eset_raw), "\n")
@@ -114,27 +119,30 @@ filter_expression_set <- function(newcounts, p) {
 }
 
 # Function to process the data and create output files
-process_data_and_create_output_files <- function(eset, nodes) {
+process_data_and_create_output_files <- function(eset, nodes, patient_id = 'BT_ALL') {
 
   nodesfilter  <- nodes %>% filter( nodeout %in% rownames(eset) ) %>% filter( nodein %in% rownames(eset) )
   nodesfilterA <- nodesfilter %>% filter( action == "Activation" ) %>% mutate( action = 1 )
   nodesfilterI <- nodesfilter %>% filter( action == "Inhibition" ) %>% mutate( action = 2 )
   newnodes     <- bind_rows( nodesfilterA, nodesfilterI )
 
-  write_xlsx( newnodes, "rede_BT_ALL_seurat.xlsx" )
-  redeact   <- matrixfromtable( "rede_BT_ALL_seurat.xlsx", 1, "act_BT_ALL_seurat.xlsx" )
-  redeinb   <- matrixfromtable( "rede_BT_ALL_seurat.xlsx", 2, "sup_BT_ALL_seurat.xlsx" )
+  net_file_name <- paste("output/rede_", patient_id, "_seurat.xlsx", sep="")
+
+  write_xlsx( newnodes, net_file_name )
+  redeact   <- matrixfromtable( net_file_name, 1, paste("output/act_", patient_id, "_seurat.xlsx", sep="") )
+  redeinb   <- matrixfromtable( net_file_name, 2, paste("output/sup_", patient_id, "_seurat.xlsx", sep="") )
 
   selecionarnos <- rownames(eset) %in% dplyr::union( newnodes[["nodeout"]], newnodes[["nodein"]] )
   datapoints    <- as.data.frame(eset) %>% rownames_to_column(var = "Cell")
   swha_seurat   <- as.data.frame(datapoints[,2:(length(selecionarnos)+1)][selecionarnos])
   swha_seurat   <- swha_seurat %>% select(sort(names(.)))
-  swha_seurat   <- swha_seurat + abs(min(swha_seurat)) 
+  # this was just a test. Didn't change anything. abs(min(swha_seurat)) = 0
+  #swha_seurat   <- swha_seurat #+ abs(min(swha_seurat))  
 
   # Check row names of the final expression set object
   cat("Column names of the final gene list: ", colnames(swha_seurat), "\n")
   
-  write_xlsx( swha_seurat, "datapoints_seurat_BT_ALL.xlsx")
+  write_xlsx( swha_seurat, paste("output/datapoints_seurat_", patient_id, ".xlsx", sep="") )
 }
 
 additional_analysis <- function(pbmc, is_filtered = FALSE,  is_filtered_genes = FALSE) {
@@ -242,11 +250,25 @@ fullcounts_pmbc <- create_seurat_object_and_normalize(counts, p)
 newcounts_nodes <- selection_gene_names(fullcounts_pmbc$fullcounts)
 
 # Filter the expression set
-eset <- filter_expression_set(newcounts_nodes$newcounts, p)
+eset <- filter_expression_set(newcounts_nodes$newcounts, p, filtering = 'tumor') # 'Regular'
+
+patient_id <- 'BT_ALL' #  BT_ALL BT_S2,   BT_S1,   BT_S4,   BT_S6
+if (patient_id != 'BT_ALL') {
+  eset <- eset[ , eset$characteristics_ch1.4 == c(patient_id)] 
+}
+
+# To verify the selected cells
+debug <- TRUE
+if (debug) {
+  eset_new <- as.data.frame(eset)
+  print( eset_new %>% select("characteristics_ch1.4") %>% distinct() )
+  print( eset_new %>% select("characteristics_ch1.6") %>% distinct() )
+  print( eset_new %>% select("characteristics_ch1.3") %>% distinct() )
+  print( eset_new %>% select("characteristics_ch1.7") %>% distinct() )
+}
 
 # Call the process_data_and_create_output_files function
-process_data_and_create_output_files(eset, newcounts_nodes$nodes)
+process_data_and_create_output_files(eset, newcounts_nodes$nodes, patient_id)
 
 # Optional - Performing additional analysis
 # additional_analysis(fullcounts_pmbc$pbmc, FALSE, FALSE)
-

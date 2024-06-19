@@ -62,8 +62,8 @@ matrixfromtable <- function( filename, actionNumber, outputName ){
   return(storeoutputs)
 }
 
-# outstore   <- matrixfromtable( "table.xlsx", 1, "act.xlsx" )
-# outstore   <- matrixfromtable( "table.xlsx", 2, "sup.xlsx" )
+# outstore   <- matrixfromtable( "input/table.xlsx", 1, "output/act.xlsx" )
+# outstore   <- matrixfromtable( "input/table.xlsx", 2, "output/sup.xlsx" )
 
 # outstore$dirmatrix
 # outstore$adjmatrix
